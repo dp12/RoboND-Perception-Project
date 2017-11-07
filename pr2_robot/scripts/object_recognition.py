@@ -185,12 +185,10 @@ def pcl_callback(pcl_msg):
     # Suggested location for where to invoke your pr2_mover() function within pcl_callback()
     # Could add some logic to determine whether or not your object detections are robust
     # before calling pr2_mover()
-    '''
     try:
-        pr2_mover(detected_objects_list)
+        pr2_mover(detected_objects)
     except rospy.ROSInterruptException:
         pass
-    '''
  #   '''
 
 # function to load parameters and request PickPlace service
@@ -218,7 +216,7 @@ def pr2_mover(object_list):
                 labels.append(object.label)
                 points_arr = ros_to_pcl(object.cloud).to_array()
                 # centroids.append(np.mean(points_arr, axis=0)[:3])
-                centroids.append(np.asscalar(np.mean(points_arr, axis=0)[:3]))
+                centroid = np.mean(points_arr, axis=0)[:3]
 
                 from std_msgs.msg import Int32
                 test_scene_num = Int32()
@@ -231,9 +229,9 @@ def pr2_mover(object_list):
                 # TODO: Create 'place_pose' for the object
                 from geometry_msgs.msg import Pose
                 pick_pose = Pose()
-                pick_pose.position.x = np.asscalar(centroids[-1][0])
-                pick_pose.position.y = np.asscalar(centroids[-1][1])
-                pick_pose.position.z = np.asscalar(centroids[-1][2])
+                pick_pose.position.x = np.asscalar(centroid[0])
+                pick_pose.position.y = np.asscalar(centroid[1])
+                pick_pose.position.z = np.asscalar(centroid[2])
 
                 # TODO: Assign the arm to be used for pick_place
                 # Green is on the right, red is on the left
@@ -247,12 +245,9 @@ def pr2_mover(object_list):
 
                 dropbox_param = rospy.get_param('/dropbox')
                 # 0 is red group; 1 is the green group
-                if object_list_param[i]['group'] == 'red':
-                    dropbox_pos = dropbox_param[0]['position']
-                elif object_list_param[i]['group'] == 'green':
-                    dropbox_pos = dropbox_param[1]['position']
-                else:
-                    raise ValueError("Bad group name")
+                for j in range(len(dropbox_param)):
+                    if object_list_param[i]['group'] == dropbox_param[j]['group']:
+                        dropbox_pos = dropbox_param[j]['position']
                 place_pose = Pose()
                 place_pose.position.x = dropbox_pos[0]
                 place_pose.position.y = dropbox_pos[1]
@@ -262,8 +257,9 @@ def pr2_mover(object_list):
                 yaml_list.append(make_yaml_dict(test_scene_num, 
                                                 arm_name, 
                                                 object_name, 
-                                                message_converter.convert_ros_message_to_dictionary(pick_pose)
-                                                message_converter.convert_ros_message_to_dictionary(place_pose)))
+                                                pick_pose,
+                                                place_pose))
+                break
     send_to_yaml('yaml_list', yaml_list)
 
     # Wait for 'pick_place_routine' service to come up
