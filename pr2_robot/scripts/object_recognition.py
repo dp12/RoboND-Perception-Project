@@ -89,6 +89,15 @@ def pcl_callback(pcl_msg):
     axis_max = 1.1
     passthrough.set_filter_limits(axis_min, axis_max)
     cloud_filtered = passthrough.filter()
+
+    # Filter out the dropboxes
+    passthrough = cloud_filtered.make_passthrough_filter()
+    filter_axis = 'x'
+    passthrough.set_filter_field_name(filter_axis)
+    axis_min = 0.3
+    axis_max = 0.8
+    passthrough.set_filter_limits(axis_min, axis_max)
+    cloud_filtered = passthrough.filter()
     ros_probe = pcl_to_ros(cloud_filtered)
     probe_pub.publish(ros_probe)
 
@@ -195,6 +204,15 @@ def pcl_callback(pcl_msg):
 def pr2_mover(object_list):
 
     # TODO: Initialize variables
+    from std_msgs.msg import Int32
+    from std_msgs.msg import String
+    from geometry_msgs.msg import Pose
+    test_scene_num = Int32()
+    test_scene_num.data = 3
+    object_name = String()
+    arm_name = String()
+    pick_pose = Pose()
+    place_pose = Pose()
 
     # TODO: Get/Read parameters
     object_list_param = rospy.get_param('/object_list')
@@ -218,24 +236,15 @@ def pr2_mover(object_list):
                 # centroids.append(np.mean(points_arr, axis=0)[:3])
                 centroid = np.mean(points_arr, axis=0)[:3]
 
-                from std_msgs.msg import Int32
-                test_scene_num = Int32()
-                test_scene_num.data = 1
-
-                from std_msgs.msg import String
-                object_name = String()
                 object_name.data = object_list_param[i]['name']
 
                 # TODO: Create 'place_pose' for the object
-                from geometry_msgs.msg import Pose
-                pick_pose = Pose()
                 pick_pose.position.x = np.asscalar(centroid[0])
                 pick_pose.position.y = np.asscalar(centroid[1])
                 pick_pose.position.z = np.asscalar(centroid[2])
 
                 # TODO: Assign the arm to be used for pick_place
                 # Green is on the right, red is on the left
-                arm_name = String()
                 if object_list_param[i]['group'] == 'green':
                     arm_name.data = 'right'
                 elif object_list_param[i]['group'] == 'red':
@@ -248,7 +257,6 @@ def pr2_mover(object_list):
                 for j in range(len(dropbox_param)):
                     if object_list_param[i]['group'] == dropbox_param[j]['group']:
                         dropbox_pos = dropbox_param[j]['position']
-                place_pose = Pose()
                 place_pose.position.x = dropbox_pos[0]
                 place_pose.position.y = dropbox_pos[1]
                 place_pose.position.z = dropbox_pos[2]
@@ -260,7 +268,8 @@ def pr2_mover(object_list):
                                                 pick_pose,
                                                 place_pose))
                 break
-    send_to_yaml('yaml_list', yaml_list)
+    print("Writing objects out to yaml")
+    send_to_yaml('yaml_list' + str(test_scene_num.data), yaml_list)
 
     # Wait for 'pick_place_routine' service to come up
     rospy.wait_for_service('pick_place_routine')
@@ -269,6 +278,7 @@ def pr2_mover(object_list):
         pick_place_routine = rospy.ServiceProxy('pick_place_routine', PickPlace)
 
         # TODO: Insert your message variables to be sent as a service request
+        print("Sending pick place service request")
         resp = pick_place_routine(test_scene_num, object_name, arm_name, pick_pose, place_pose)
 
         print ("Response: ",resp.success)
